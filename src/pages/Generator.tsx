@@ -4,8 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Sparkles, LogOut, CreditCard } from "lucide-react";
+import { Loader2, Sparkles, LogOut, CreditCard, History, Image as ImageIcon } from "lucide-react";
 import { User, Session } from "@supabase/supabase-js";
 
 const Generator = () => {
@@ -14,9 +17,13 @@ const Generator = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [credits, setCredits] = useState<number>(0);
   const [prompt, setPrompt] = useState("");
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchingCredits, setFetchingCredits] = useState(true);
+  const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [numImages, setNumImages] = useState(1);
+  const [style, setStyle] = useState("auto");
+  const [historyImages, setHistoryImages] = useState<any[]>([]);
 
   useEffect(() => {
     // Set up auth state listener
@@ -69,23 +76,51 @@ const Generator = () => {
     }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("generations")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setHistoryImages(data || []);
+    } catch (error: any) {
+      console.error("Error fetching history:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchHistory();
+    }
+  }, [user]);
+
+  const creditsRequired = numImages;
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a prompt");
       return;
     }
 
-    if (credits < 1) {
+    if (credits < creditsRequired) {
       toast.error("Insufficient credits! Please top up to continue.");
       return;
     }
 
     setLoading(true);
-    setGeneratedImage(null);
+    setGeneratedImages([]);
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-image", {
-        body: { prompt },
+        body: { 
+          prompt,
+          aspectRatio,
+          numImages,
+          style
+        },
       });
 
       if (error) {
@@ -95,12 +130,13 @@ const Generator = () => {
         throw error;
       }
 
-      if (data?.imageUrl) {
-        setGeneratedImage(data.imageUrl);
-        setCredits((prev) => Math.max(0, prev - 1));
-        toast.success("Image generated successfully!");
+      if (data?.imageUrls && data.imageUrls.length > 0) {
+        setGeneratedImages(data.imageUrls);
+        setCredits((prev) => Math.max(0, prev - creditsRequired));
+        toast.success(`${data.imageUrls.length} image(s) generated successfully!`);
+        fetchHistory();
       } else {
-        throw new Error("No image returned");
+        throw new Error("No images returned");
       }
     } catch (error: any) {
       console.error("Generation error:", error);
@@ -109,6 +145,13 @@ const Generator = () => {
       setLoading(false);
     }
   };
+
+  const promptIdeas = [
+    "A cyberpunk cityscape at night with neon lights",
+    "A mystical forest with glowing mushrooms",
+    "A futuristic robot in a desert landscape",
+    "An ethereal cosmic nebula with stars"
+  ];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -165,8 +208,8 @@ const Generator = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-12 relative z-10">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="text-center space-y-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center space-y-4 mb-8">
             <h2 className="text-4xl font-bold bg-gradient-cyber bg-clip-text text-transparent">
               Create Stunning AI Images
             </h2>
@@ -175,67 +218,202 @@ const Generator = () => {
             </p>
           </div>
 
-          <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50 shadow-glow-cyan">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
-                  Your Prompt
-                </label>
-                <Textarea
-                  placeholder="A futuristic city at sunset with neon lights..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="min-h-32 bg-input border-border/50 focus:border-primary transition-all resize-none"
-                />
+          <Tabs defaultValue="generate" className="space-y-6">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 bg-card/50 backdrop-blur-sm">
+              <TabsTrigger value="generate" className="data-[state=active]:bg-gradient-cyber">
+                <ImageIcon className="w-4 h-4 mr-2" />
+                Generate
+              </TabsTrigger>
+              <TabsTrigger value="history" className="data-[state=active]:bg-gradient-cyber">
+                <History className="w-4 h-4 mr-2" />
+                History
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="generate" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Panel - Controls */}
+                <div className="lg:col-span-1 space-y-4">
+                  <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Aspect Ratio</Label>
+                        <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                          <SelectTrigger className="bg-input border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1:1">1:1 Square</SelectItem>
+                            <SelectItem value="16:9">16:9 Landscape</SelectItem>
+                            <SelectItem value="9:16">9:16 Portrait</SelectItem>
+                            <SelectItem value="3:2">3:2 Classic</SelectItem>
+                            <SelectItem value="2:3">2:3 Portrait</SelectItem>
+                            <SelectItem value="4:3">4:3 Standard</SelectItem>
+                            <SelectItem value="3:4">3:4 Portrait</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Style</Label>
+                        <Select value={style} onValueChange={setStyle}>
+                          <SelectTrigger className="bg-input border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Auto</SelectItem>
+                            <SelectItem value="photorealistic">Photorealistic</SelectItem>
+                            <SelectItem value="anime">Anime</SelectItem>
+                            <SelectItem value="digital-art">Digital Art</SelectItem>
+                            <SelectItem value="3d-render">3D Render</SelectItem>
+                            <SelectItem value="oil-painting">Oil Painting</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Number of Images</Label>
+                        <Select value={numImages.toString()} onValueChange={(v) => setNumImages(parseInt(v))}>
+                          <SelectTrigger className="bg-input border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 Image</SelectItem>
+                            <SelectItem value="2">2 Images</SelectItem>
+                            <SelectItem value="3">3 Images</SelectItem>
+                            <SelectItem value="4">4 Images</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="pt-4 border-t border-border/50">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Credits Required:</span>
+                          <span className="text-primary font-bold text-lg">{creditsRequired}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Right Panel - Prompt & Output */}
+                <div className="lg:col-span-2 space-y-4">
+                  <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50 shadow-glow-cyan">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Your Prompt</Label>
+                        <Textarea
+                          placeholder="A futuristic city at sunset with neon lights..."
+                          value={prompt}
+                          onChange={(e) => setPrompt(e.target.value)}
+                          className="min-h-32 bg-input border-border/50 focus:border-primary transition-all resize-none"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {promptIdeas.map((idea, idx) => (
+                            <Button
+                              key={idx}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPrompt(idea)}
+                              className="text-xs border-border/50 hover:border-primary"
+                            >
+                              {idea.slice(0, 30)}...
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={handleGenerate}
+                        disabled={loading || credits < creditsRequired}
+                        className="w-full bg-gradient-cyber hover:shadow-glow-cyan transition-all duration-300 h-12 text-lg"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="mr-2 h-5 w-5" />
+                            Generate {numImages} Image{numImages > 1 ? 's' : ''}
+                          </>
+                        )}
+                      </Button>
+
+                      {credits < creditsRequired && (
+                        <p className="text-sm text-destructive text-center">
+                          Insufficient credits! You need {creditsRequired} but have {credits}.
+                        </p>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Output Area */}
+                  {(generatedImages.length > 0 || loading) && (
+                    <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50">
+                      {loading ? (
+                        <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 border border-border/50 flex items-center justify-center">
+                          <div className="text-center space-y-4">
+                            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
+                            <p className="text-muted-foreground">
+                              Crafting your masterpiece...
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`grid gap-4 ${numImages === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                          {generatedImages.map((img, idx) => (
+                            <div key={idx} className="rounded-lg overflow-hidden bg-muted/50 border border-border/50">
+                              <img
+                                src={img}
+                                alt={`Generated ${idx + 1}`}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  )}
+                </div>
               </div>
+            </TabsContent>
 
-              <Button
-                onClick={handleGenerate}
-                disabled={loading || credits < 1}
-                className="w-full bg-gradient-cyber hover:shadow-glow-cyan transition-all duration-300 h-12 text-lg"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-5 w-5" />
-                    Generate Image
-                  </>
-                )}
-              </Button>
-
-              {credits < 1 && (
-                <p className="text-sm text-destructive text-center">
-                  You're out of credits. Top up to continue creating!
-                </p>
-              )}
-            </div>
-          </Card>
-
-          {/* Output Area */}
-          {(generatedImage || loading) && (
-            <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50">
-              <div className="aspect-square rounded-lg overflow-hidden bg-muted/50 border border-border/50 flex items-center justify-center">
-                {loading ? (
-                  <div className="text-center space-y-4">
-                    <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-                    <p className="text-muted-foreground">
-                      Crafting your masterpiece...
+            <TabsContent value="history" className="space-y-4">
+              <Card className="p-6 backdrop-blur-xl bg-card/80 border-border/50">
+                {historyImages.length === 0 ? (
+                  <div className="text-center py-12">
+                    <History className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No generation history yet</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Start generating images to see them here
                     </p>
                   </div>
-                ) : generatedImage ? (
-                  <img
-                    src={generatedImage}
-                    alt="Generated"
-                    className="w-full h-full object-contain"
-                  />
-                ) : null}
-              </div>
-            </Card>
-          )}
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {historyImages.map((item) => (
+                      <div key={item.id} className="group relative rounded-lg overflow-hidden bg-muted/50 border border-border/50 hover:border-primary transition-all">
+                        <img
+                          src={item.image_url}
+                          alt={item.prompt}
+                          className="w-full aspect-square object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute bottom-0 left-0 right-0 p-3">
+                            <p className="text-xs text-white line-clamp-2">{item.prompt}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {item.aspect_ratio} • {item.style}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
