@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      edits: {
+        Row: {
+          created_at: string
+          credits_used: number
+          edit_type: string
+          edited_image_url: string
+          id: string
+          original_image_url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          edit_type: string
+          edited_image_url: string
+          id?: string
+          original_image_url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          edit_type?: string
+          edited_image_url?: string
+          id?: string
+          original_image_url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       generations: {
         Row: {
           aspect_ratio: string

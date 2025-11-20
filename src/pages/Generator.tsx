@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Sparkles, LogOut, CreditCard, History, Image as ImageIcon } from "lucide-react";
+import { Loader2, Sparkles, LogOut, CreditCard, History, Image as ImageIcon, Wand2 } from "lucide-react";
 import { User, Session } from "@supabase/supabase-js";
 
 const Generator = () => {
@@ -186,6 +186,16 @@ const Generator = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/editor")}
+              className="border-border/50 hover:border-primary transition-all"
+            >
+              <Wand2 className="w-4 h-4 mr-2" />
+              AI Editor
+            </Button>
+
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card/50 backdrop-blur-sm border border-border/50">
               <CreditCard className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium">
